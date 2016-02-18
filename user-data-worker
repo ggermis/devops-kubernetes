@@ -1,0 +1,122 @@
+#cloud-config
+
+write_files:
+  - path: /etc/kubernetes/manifests/kube-proxy.yaml
+    content: |
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: kube-proxy
+        namespace: kube-system
+      spec:
+        hostNetwork: true
+        containers:
+        - name: kube-proxy
+          image: gcr.io/google_containers/hyperkube:v1.1.7
+          command:
+          - /hyperkube
+          - proxy
+          - --master=https://172.17.8.11
+          - --kubeconfig=/etc/kubernetes/worker-kubeconfig.yaml
+          - --proxy-mode=iptables
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - mountPath: /etc/ssl/certs
+              name: ssl-certs
+            - mountPath: /etc/kubernetes/worker-kubeconfig.yaml
+              name: kubeconfig
+              readOnly: true
+            - mountPath: /etc/kubernetes/ssl
+              name: etc-kube-ssl
+              readOnly: true
+        volumes:
+          - name: ssl-certs
+            hostPath:
+              path: /usr/share/ca-certificates
+          - name: kubeconfig
+            hostPath:
+              path: /etc/kubernetes/worker-kubeconfig.yaml
+          - name: etc-kube-ssl
+            hostPath:
+              path: /etc/kubernetes/ssl
+
+  - path: /etc/kubernetes/worker-kubeconfig.yaml
+    content: |
+      apiVersion: v1
+      kind: Config
+      clusters:
+      - name: local
+        cluster:
+          certificate-authority: /etc/kubernetes/ssl/ca.pem
+      users:
+      - name: kubelet
+        user:
+          client-certificate: /etc/kubernetes/ssl/worker.pem
+          client-key: /etc/kubernetes/ssl/worker-key.pem
+      contexts:
+      - context:
+          cluster: local
+          user: kubelet
+        name: kubelet-context
+      current-context: kubelet-context
+
+coreos:
+  update:
+    group: alpha
+    reboot-strategy: best-effort
+  manage_etc_hosts: localhost
+  etcd2:
+    proxy: on
+    listen-client-urls: http://0.0.0.0:2379
+    initial-cluster: etcd-01=http://172.17.8.101:2380
+  flannel:
+    interface: $public_ipv4
+  units:
+    - name: etcd2.service
+      command: start
+    - name: flanneld.service
+      drop-ins:
+        - name: 50-network-config.conf
+          content: |
+            [Unit]
+            Requires=etcd2.service
+            After=etcd2.service
+          command: start
+    - name: docker-tcp.socket
+      command: start
+      enable: true
+      content: |
+        [Unit]
+        Description=Docker Socket for the API
+        Requires=flanneld.service
+        After=flanneld.service
+        [Socket]
+        ListenStream=2375
+        Service=docker.service
+        BindIPv6Only=both
+        [Install]
+        WantedBy=sockets.target
+    - name: kubelet.service
+      command: start
+      content: |
+        [Unit]
+        Requires=flanneld.service
+        After=flanneld.service
+        [Service]
+        ExecStart=/usr/bin/kubelet \
+          --api_servers=https://172.17.8.11 \
+          --register-node=true \
+          --allow-privileged=true \
+          --config=/etc/kubernetes/manifests \
+          --hostname-override=$public_ipv4 \
+          --cluster-dns=172.50.0.10 \
+          --cluster-domain=cluster.local \
+          --kubeconfig=/etc/kubernetes/worker-kubeconfig.yaml \
+          --tls-cert-file=/etc/kubernetes/ssl/worker.pem \
+          --tls-private-key-file=/etc/kubernetes/ssl/worker-key.pem
+        Restart=always
+        RestartSec=10
+        [Install]
+        WantedBy=multi-user.target
+
