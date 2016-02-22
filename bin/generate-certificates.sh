@@ -2,6 +2,9 @@
 
 CERT_DIR=certificates
 
+[[ -d "$CERT_DIR" ]] && { echo "Certificates already exist. Remove the '$CERT_DIR' directory to regenerate them."; exit 1; }
+
+
 # Flannel: 10.200.0.0/16
 # Service: 172.50.0.0/24
 # K8_service: 172.50.0.1
@@ -21,7 +24,6 @@ K8_SERVICE=172.50.0.1
 DNS_SERVICE_IP=172.50.0.10
 
 POD_NETWORK=10.200.0.0/16
-
 
 
 mkdir -p "$CERT_DIR" &&
