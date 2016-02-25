@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox
+  namespace: kube-system
+spec:
+  containers:
+  - image: busybox:1.23.2
+    name: busybox
+    command:
+      - sleep
+      - "60000"
+    imagePullPolicy: IfNotPresent
+  restartPolicy: Always
+  nodeSelector:
+    worker-id: "2"

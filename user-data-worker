@@ -63,7 +63,7 @@ write_files:
 
 coreos:
   update:
-    group: alpha
+    group: beta
     reboot-strategy: best-effort
   manage_etc_hosts: localhost
   etcd2:

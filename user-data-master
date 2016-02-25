@@ -198,7 +198,7 @@ coreos:
   flannel:
     interface: $public_ipv4
   update:
-    group: alpha
+    group: beta
     reboot-strategy: best-effort
   units:
     - name: etcd2.service
